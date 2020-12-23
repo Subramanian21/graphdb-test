@@ -1,0 +1,17 @@
+1. Download Kafka package, https://www.apache.org/dyn/closer.cgi?path=/kafka/2.6.0/kafka-2.6.0-src.tgz and Extract the tar
+2. Open command prompt as administrator, go to  <path>/kafka_2.13-2.6.0/ and Start zookeeper,   
+.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+3. Open another command prompt as administrator, go to  <path>/kafka_2.13-2.6.0/ and Start kafka broker,   
+.\bin\windows\kafka-server-start.bat .\config\server.properties
+4. Open another command prompt as administrator, go to  <path>/kafka_2.13-2.6.0/ and Create a new kafka topic
+.\bin\windows\kafka-topics.bat --create --topic cora-chat --zookeeper localhost:2181 --replication-factor 1 --partitions 1
+
+
+
+
+
+kafka-topics.bat --zookeeper localhost:2181 --topic cora-chat --delete
+
+
+
+.\bin\windows\kafka-topics.bat --create --topic cora-topic --zookeeper localhost:2181 --replication-factor 1 --partitions 2
