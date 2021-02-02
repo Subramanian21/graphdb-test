@@ -1,0 +1,181 @@
+const request = require('request-promise');
+const axios = require('axios')
+const { Kafka, logLevel, AssignerProtocol: {MemberAssignment, MemberMetadata}, PartitionAssigners: { roundRobin }} = require('kafkajs')
+const kafka_input_topic = 'cora-input-topic'
+const web_partitions = [0, 1, 2]
+const partitionAssigner = require('./partitionAssigner')
+const kafka = new Kafka({
+    logLevel: logLevel.INFO,
+    clientId: 'cora-app',
+    brokers: ['localhost:9092']
+})
+
+const consumer = kafka.consumer({
+    groupId: 'cora-input-web-consumer',
+    partitionAssigners: [
+        partitionAssigner.assign('InputWebPartitionAssigner', web_partitions),
+        roundRobin
+    ]
+})
+
+const run = async () => {
+    await consumer.connect()
+    await consumer.subscribe({ topic: kafka_input_topic })
+    await consumer.run({
+        eachMessage: async ({ topic, partition, message }) => {
+            console.log({
+                key: message.key.toString(),
+                value: message.value.toString(),
+                headers: message.headers,
+            })
+            var msg = JSON.parse(message.value.toString());
+            if (msg && msg.senderId) {
+              if(msg.authenticated){
+                var response = await callBot(msg,true);
+                console.log("response: "+JSON.stringify(response.text));
+                response.text.forEach(async function(element){
+                  if(element.includes("##")){
+                      console.log("##")
+                      var hashItems = element.split("##");
+                      hashItems.forEach(async function(hashSegment){
+                        console.log("hash segment:"+hashSegment);
+                        if(hashSegment.length>0){
+                          let published = await publishMessage(msg.senderId,hashSegment);
+                          console.log("published"+hashSegment+"sta:"+published);
+                        }
+                        
+                      })
+                    }
+                    else{
+                      let published = await publishMessage(msg.senderId, element);
+                      console.log("published"+element+"sta:"+published);
+                    }
+                  });
+              }
+              else{
+                var response = await callBot(msg,false);
+                console.log("response: "+JSON.stringify(response.text));
+                response.text.forEach(async function(element) {
+                        if(element.includes("##")){
+                            console.log("##")
+                            var hashItems = element.split("##");
+                            hashItems.forEach(async function(hashSegment){
+                              console.log("hash segment: "+hashSegment);
+                              if(hashSegment!=" "){
+                                let published = await publishMessage(msg.senderId,hashSegment);
+                                console.log("published"+hashSegment);
+                              }
+                              
+                            })
+                          }
+                          else{
+                            let publish = await publishMessage(msg.senderId, element);
+                            console.log("published"+element);
+                          }
+                        });
+              }
+                
+                
+            }
+        },
+    })
+}
+
+async function callBot(msg,authenticated) {
+  let body = {}
+  if(authenticated){
+    console.log("authenticated");
+    body={
+        "conversationId":msg.senderId,
+        "authenticated":true,
+        "message":{
+          "text":msg.message
+        },
+        "apiKey":msg.accessToken,
+        "cin":msg.cin,
+        "brand":msg.brand,
+        "bin":msg.bin,
+        "blcin":msg.blcin,
+        "customerType":msg.customerType,
+        "dbid":msg.dbid,
+        "user":"34554560jaya"
+    }
+  }
+  else{
+    body={
+      "conversationId":msg.senderId,
+        "message":{
+          "text":msg.message
+        },
+        "cin":"34534543",
+        "brand":"RBS",
+        "user":"34554560jaya",
+        "authenticated":false
+    }
+  }
+    let options = {
+      method: 'POST',
+      uri: 'https://luvo-ivr-botmaster.eu-gb.mybluemix.net/REST/LUVORest',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-id': 'f3KR6S73-PT08-qqUs-ODI7-uXGCJebnXQkA',
+        'x-client-secret':'aRkobKkOb5ZHpn8ml3cunVQgjFDDyes5Z8HcEW1E0qCxMTvZ12'
+       },
+      body: body,
+      json: true,
+      simple: false,
+      rejectUnauthorized: false
+    }
+    console.log("came");
+    try {
+      if(msg.message=="hello"){
+        return {"text": ["text"]};
+      }
+      else if(msg.message=="pin reminder for my debit card"){
+        return {"text": [`Got it. You need a PIN reminder for your debit card. ##I can request for one to be posted to you. ##Here are the accounts I'm able to request a PIN reminder for. Please select an account: ##<break/><account-carousel><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="BADHRI" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="14935236" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 1"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="BADHRII" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="17337496" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 
+        2"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="CHAWAL" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="14935228" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 3"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="DAL" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="14935201" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 4"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="JNDPQ C & A" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> 
+        <text name="accountNumber" value="15145107" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 5"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="JNDPQ C L AE" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="91112591" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 6"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="KLRITGYI C/OKU" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="64650510" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 7"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="RASLPP N NIH PNJUVMH" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="14885816" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 8"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" 
+        value="TEST" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="14935244" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 9"/><break/> </image><break/> <break/> <image src="https://personal.natwest.com/content/dam/natwest/personal/savings/illustrations/savings-goal-tool/nw-pers-ill-piggy-in-purple-trans.png" tooltip="Savings"><break/> <text name="accountDesc" value="YKJSVECXIY KS" tooltip="Savings" bold="true" size="medium" color="42145f"/><break/> <text name="accountNumber" value="65319915" tooltip="Account Number" bold="false" size="medium" color="404041"/><break/> <button text="Select Account" tooltip="Press me to select this account" pushtext="Selected account: 10"/><break/> </image><break/> <break/> </account-carousel><break/><ol type="undefined" title=""><li>Account not shown</li></ol>`]}
+      }
+      else if(msg.message=="show buttons"){
+        return {"text": ["buttons"]};
+      }
+      else if(msg.message=="carousel"){
+        return {"text": ["carousel"]};
+      }
+      else if(msg.message=="card"){
+        return {"text": ["card"]};
+      }else{
+        const resp = await request(options);
+        //console.log(`Response from Api: ${JSON.stringify(resp)}`)
+        return resp;
+      }
+        
+    } catch (error) {
+        console.log(`Error while calling the api: ${error} || ${JSON.stringify(error)}`)
+    }
+    
+}
+
+async function publishMessage(senderId, message) {
+    let publish = await axios
+        .post('http://11.14.72.156:3100/api/receiveMsg', {
+            senderId: senderId,
+            message: message
+        }, {
+            headers: {
+                'cora-channel': 'web'
+            }
+        })
+        .then(res => {
+            console.log("published"+message);
+            return "success"
+        })
+        .catch(error => {
+            console.error(error)
+        })
+        return publish;
+}
+
+// Start Kafka Consumer
+run().catch(e => console.log(`Error starting consumer ${e.stack}`))
